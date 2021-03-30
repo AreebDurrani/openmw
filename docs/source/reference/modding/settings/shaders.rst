@@ -26,6 +26,7 @@ Has no effect if the 'force shaders' option is false.
 Enabling per-pixel lighting results in visual differences to the original MW engine.
 It is not recommended to enable this option when using vanilla Morrowind files,
 because certain lights in Morrowind rely on vertex lighting to look as intended.
+Note that groundcover shaders ignore this setting.
 
 clamp lighting
 --------------
@@ -146,3 +147,14 @@ radial fog
 By default, the fog becomes thicker proportionally to your distance from the clipping plane set at the clipping distance, which causes distortion at the edges of the screen.
 This setting makes the fog use the actual eye point distance (or so called Euclidean distance) to calculate the fog, which makes the fog look less artificial, especially if you have a wide FOV.
 Note that the rendering will act as if you have 'force shaders' option enabled with this on, which means that shaders will be used to render all objects and the terrain.
+
+antialias alpha test
+---------------------------------------
+
+:Type:		boolean
+:Range:		True/False
+:Default:	False
+
+Convert the alpha test (cutout/punchthrough alpha) to alpha-to-coverage when :ref:`antialiasing` is on.
+This allows MSAA to work with alpha-tested meshes, producing better-looking edges without pixelation.
+When MSAA is off, this setting will have no visible effect, but might have a performance cost.

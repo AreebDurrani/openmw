@@ -102,6 +102,7 @@ namespace MWWorld
             bool mSky;
             bool mGodMode;
             bool mScriptsEnabled;
+            bool mDiscardMovements;
             std::vector<std::string> mContentFiles;
 
             std::string mUserDataPath;
@@ -156,7 +157,7 @@ namespace MWWorld
             void processDoors(float duration);
             ///< Run physics simulation and modify \a world accordingly.
 
-            void doPhysics(float duration);
+            void doPhysics(float duration, osg::Timer_t frameStart, unsigned int frameNumber, osg::Stats& stats);
             ///< Run physics simulation and modify \a world accordingly.
 
             void updateNavigator();
@@ -176,7 +177,7 @@ namespace MWWorld
              * @param contentLoader -
              */
             void loadContentFiles(const Files::Collections& fileCollections,
-                const std::vector<std::string>& content, ContentLoader& contentLoader);
+                const std::vector<std::string>& content, const std::vector<std::string>& groundcover, ContentLoader& contentLoader);
 
             float feetToGameUnits(float feet);
             float getActivationDistancePlusTelekinesis();
@@ -195,6 +196,7 @@ namespace MWWorld
                 Resource::ResourceSystem* resourceSystem, SceneUtil::WorkQueue* workQueue,
                 const Files::Collections& fileCollections,
                 const std::vector<std::string>& contentFiles,
+                const std::vector<std::string>& groundcoverFiles,
                 ToUTF8::Utf8Encoder* encoder, int activationDistanceOverride,
                 const std::string& startCell, const std::string& startupScript,
                 const std::string& resourcePath, const std::string& userDataPath);
@@ -274,11 +276,12 @@ namespace MWWorld
             char getGlobalVariableType (const std::string& name) const override;
             ///< Return ' ', if there is no global variable with this name.
 
-            std::string getCellName (const MWWorld::CellStore *cell = 0) const override;
+            std::string getCellName (const MWWorld::CellStore *cell = nullptr) const override;
             ///< Return name of the cell.
             ///
             /// \note If cell==0, the cell the player is currently in will be used instead to
             /// generate a name.
+            std::string getCellName(const ESM::Cell* cell) const override;
 
             void removeRefScript (MWWorld::RefData *ref) override;
             //< Remove the script attached to ref from mLocalScripts
@@ -287,9 +290,9 @@ namespace MWWorld
             ///< Return a pointer to a liveCellRef with the given name.
             /// \param activeOnly do non search inactive cells.
 
-            Ptr searchPtr (const std::string& name, bool activeOnly, bool searchInContainers = true) override;
+            Ptr searchPtr (const std::string& name, bool activeOnly, bool searchInContainers = false) override;
             ///< Return a pointer to a liveCellRef with the given name.
-            /// \param activeOnly do non search inactive cells.
+            /// \param activeOnly do not search inactive cells.
 
             Ptr searchPtrViaActorId (int actorId) override;
             ///< Search is limited to the active cells.
@@ -379,6 +382,9 @@ namespace MWWorld
             MWWorld::Ptr moveObject (const Ptr& ptr, CellStore* newCell, float x, float y, float z, bool movePhysics=true) override;
             ///< @return an updated Ptr
 
+            MWWorld::Ptr moveObjectBy(const Ptr& ptr, osg::Vec3f vec) override;
+            ///< @return an updated Ptr
+
             void scaleObject (const Ptr& ptr, float scale) override;
 
             /// World rotates object, uses radians
@@ -409,6 +415,8 @@ namespace MWWorld
             /// doPhysics.
 
             void updateAnimatedCollisionShape(const Ptr &ptr) override;
+
+            const MWPhysics::RayCastingInterface* getRayCasting() const override;
 
             bool castRay (float x1, float y1, float z1, float x2, float y2, float z2, int mask) override;
             ///< cast a Ray and return true if there is an object in the ray path.
@@ -485,8 +493,12 @@ namespace MWWorld
             ///< Write this record to the ESM store, allowing it to override a pre-existing record with the same ID.
             /// \return pointer to created record
 
+            const ESM::Container *createOverrideRecord (const ESM::Container& record) override;
+            ///< Write this record to the ESM store, allowing it to override a pre-existing record with the same ID.
+            /// \return pointer to created record
+
             void update (float duration, bool paused) override;
-            void updatePhysics (float duration, bool paused) override;
+            void updatePhysics (float duration, bool paused, osg::Timer_t frameStart, unsigned int frameNumber, osg::Stats& stats) override;
 
             void updateWindowManager () override;
 
@@ -524,20 +536,20 @@ namespace MWWorld
             void togglePOV(bool force = false) override;
 
             bool isFirstPerson() const override;
+            bool isPreviewModeEnabled() const override;
 
             void togglePreviewMode(bool enable) override;
 
             bool toggleVanityMode(bool enable) override;
 
             void allowVanityMode(bool allow) override;
-
-            void changeVanityModeScale(float factor) override;
-
             bool vanityRotateCamera(float * rot) override;
-            void setCameraDistance(float dist, bool adjust = false, bool override = true) override;
+            void adjustCameraDistance(float dist) override;
 
             void applyDeferredPreviewRotationToPlayer(float dt) override;
             void disableDeferredPreviewRotation() override;
+
+            void saveLoaded() override;
 
             void setupPlayer() override;
             void renderPlayer() override;
@@ -589,7 +601,7 @@ namespace MWWorld
 
             /// \todo this does not belong here
             void screenshot (osg::Image* image, int w, int h) override;
-            bool screenshot360 (osg::Image* image, std::string settingStr) override;
+            bool screenshot360 (osg::Image* image) override;
 
             /// Find center of exterior cell above land surface
             /// \return false if exterior with given name not exists, true otherwise
@@ -611,7 +623,7 @@ namespace MWWorld
             /// Returns true if levitation spell effect is allowed.
             bool isLevitationEnabled() const override;
 
-            bool getGodModeState() override;
+            bool getGodModeState() const override;
 
             bool toggleGodMode() override;
 
@@ -634,6 +646,7 @@ namespace MWWorld
             void launchMagicBolt (const std::string& spellId, const MWWorld::Ptr& caster, const osg::Vec3f& fallbackDirection) override;
             void launchProjectile (MWWorld::Ptr& actor, MWWorld::Ptr& projectile,
                                            const osg::Vec3f& worldPos, const osg::Quat& orient, MWWorld::Ptr& bow, float speed, float attackStrength) override;
+            void updateProjectilesCasters() override;
 
             void applyLoopingParticles(const MWWorld::Ptr& ptr) override;
 
@@ -732,6 +745,8 @@ namespace MWWorld
             bool isAreaOccupiedByOtherActor(const osg::Vec3f& position, const float radius, const MWWorld::ConstPtr& ignore) const override;
 
             void reportStats(unsigned int frameNumber, osg::Stats& stats) const override;
+
+            std::vector<MWWorld::Ptr> getAll(const std::string& id) override;
     };
 }
 

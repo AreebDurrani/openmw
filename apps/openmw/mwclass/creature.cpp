@@ -58,18 +58,18 @@ namespace MWClass
         MWWorld::ContainerStore* mContainerStore; // may be InventoryStore for some creatures
         MWMechanics::Movement mMovement;
 
-        virtual MWWorld::CustomData *clone() const;
+        MWWorld::CustomData *clone() const override;
 
-        virtual CreatureCustomData& asCreatureCustomData()
+        CreatureCustomData& asCreatureCustomData() override
         {
             return *this;
         }
-        virtual const CreatureCustomData& asCreatureCustomData() const
+        const CreatureCustomData& asCreatureCustomData() const override
         {
             return *this;
         }
 
-        CreatureCustomData() : mContainerStore(0) {}
+        CreatureCustomData() : mContainerStore(nullptr) {}
         virtual ~CreatureCustomData() { delete mContainerStore; }
     };
 
@@ -500,7 +500,7 @@ namespace MWClass
         registerClass (typeid (ESM::Creature).name(), instance);
     }
 
-    float Creature::getSpeed(const MWWorld::Ptr &ptr) const
+    float Creature::getMaxSpeed(const MWWorld::Ptr &ptr) const
     {
         const MWMechanics::CreatureStats& stats = getCreatureStats(ptr);
 
@@ -531,11 +531,6 @@ namespace MWClass
             moveSpeed = getSwimSpeed(ptr);
         else
             moveSpeed = getWalkSpeed(ptr);
-
-        const MWMechanics::Movement& movementSettings = ptr.getClass().getMovementSettings(ptr);
-        if (movementSettings.mIsStrafing)
-            moveSpeed *= 0.75f;
-        moveSpeed *= movementSettings.mSpeedFactor;
 
         return moveSpeed;
     }
@@ -845,14 +840,6 @@ namespace MWClass
                         ptr.getCellRef().getPosition().pos[2]);
             }
         }
-    }
-
-    void Creature::restock(const MWWorld::Ptr& ptr) const
-    {
-        MWWorld::LiveCellRef<ESM::Creature> *ref = ptr.get<ESM::Creature>();
-        const ESM::InventoryList& list = ref->mBase->mInventory;
-        MWWorld::ContainerStore& store = getContainerStore(ptr);
-        store.restock(list, ptr, ptr.getCellRef().getRefId());
     }
 
     int Creature::getBaseFightRating(const MWWorld::ConstPtr &ptr) const

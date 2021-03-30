@@ -121,6 +121,7 @@ void registerSerializers()
         const char* ignore[] = {
             "MWRender::PtrHolder",
             "Resource::TemplateRef",
+            "Resource::TemplateMultiRef",
             "SceneUtil::CompositeStateSetUpdater",
             "SceneUtil::LightListCallback",
             "SceneUtil::LightManagerUpdateCallback",
@@ -143,7 +144,7 @@ void registerSerializers()
             "NifOsg::GeomMorpherController",
             "NifOsg::UpdateMorphGeometry",
             "NifOsg::UVController",
-            "NifOsg::NodeIndexHolder",
+            "NifOsg::VisController",
             "osgMyGUI::Drawable",
             "osg::DrawCallback",
             "osgOQ::ClearQueriesCallback",

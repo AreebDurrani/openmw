@@ -48,6 +48,57 @@ namespace
             }
         }
     }
+
+    std::vector<ESM::NPC> getNPCsToReplace(const MWWorld::Store<ESM::Faction>& factions, const MWWorld::Store<ESM::Class>& classes, const std::map<std::string, ESM::NPC>& npcs)
+    {
+        // Cache first class from store - we will use it if current class is not found
+        std::string defaultCls;
+        auto it = classes.begin();
+        if (it != classes.end())
+            defaultCls = it->mId;
+        else
+            throw std::runtime_error("List of NPC classes is empty!");
+
+        // Validate NPCs for non-existing class and faction.
+        // We will replace invalid entries by fixed ones
+        std::vector<ESM::NPC> npcsToReplace;
+
+        for (auto it : npcs)
+        {
+            ESM::NPC npc = it.second;
+            bool changed = false;
+
+            const std::string npcFaction = npc.mFaction;
+            if (!npcFaction.empty())
+            {
+                const ESM::Faction *fact = factions.search(npcFaction);
+                if (!fact)
+                {
+                    Log(Debug::Verbose) << "NPC '" << npc.mId << "' (" << npc.mName << ") has nonexistent faction '" << npc.mFaction << "', ignoring it.";
+                    npc.mFaction.clear();
+                    npc.mNpdt.mRank = 0;
+                    changed = true;
+                }
+            }
+
+            std::string npcClass = npc.mClass;
+            if (!npcClass.empty())
+            {
+                const ESM::Class *cls = classes.search(npcClass);
+                if (!cls)
+                {
+                    Log(Debug::Verbose) << "NPC '" << npc.mId << "' (" << npc.mName << ") has nonexistent class '" << npc.mClass << "', using '" << defaultCls << "' class as replacement.";
+                    npc.mClass = defaultCls;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                npcsToReplace.push_back(npc);
+        }
+
+        return npcsToReplace;
+    }
 }
 
 namespace MWWorld
@@ -71,7 +122,7 @@ void ESMStore::load(ESM::ESMReader &esm, Loading::Listener* listener)
 {
     listener->setProgressRange(1000);
 
-    ESM::Dialogue *dialogue = 0;
+    ESM::Dialogue *dialogue = nullptr;
 
     // Land texture loading needs to use a separate internal store for each plugin.
     // We set the number of plugins here to avoid continual resizes during loading,
@@ -153,7 +204,7 @@ void ESMStore::load(ESM::ESMReader &esm, Loading::Listener* listener)
             if (n.intval==ESM::REC_DIAL) {
                 dialogue = const_cast<ESM::Dialogue*>(mDialogs.find(id.mId));
             } else {
-                dialogue = 0;
+                dialogue = nullptr;
             }
         }
         listener->setProgress(static_cast<size_t>(esm.getFileOffset() / (float)esm.getFileSize() * 1000));
@@ -218,49 +269,7 @@ int ESMStore::getRefCount(const std::string& id) const
 
 void ESMStore::validate()
 {
-    // Cache first class from store - we will use it if current class is not found
-    std::string defaultCls = "";
-    Store<ESM::Class>::iterator it = mClasses.begin();
-    if (it != mClasses.end())
-        defaultCls = it->mId;
-    else
-        throw std::runtime_error("List of NPC classes is empty!");
-
-    // Validate NPCs for non-existing class and faction.
-    // We will replace invalid entries by fixed ones
-    std::vector<ESM::NPC> npcsToReplace;
-    for (ESM::NPC npc : mNpcs)
-    {
-        bool changed = false;
-
-        const std::string npcFaction = npc.mFaction;
-        if (!npcFaction.empty())
-        {
-            const ESM::Faction *fact = mFactions.search(npcFaction);
-            if (!fact)
-            {
-                Log(Debug::Verbose) << "NPC '" << npc.mId << "' (" << npc.mName << ") has nonexistent faction '" << npc.mFaction << "', ignoring it.";
-                npc.mFaction.clear();
-                npc.mNpdt.mRank = 0;
-                changed = true;
-            }
-        }
-
-        std::string npcClass = npc.mClass;
-        if (!npcClass.empty())
-        {
-            const ESM::Class *cls = mClasses.search(npcClass);
-            if (!cls)
-            {
-                Log(Debug::Verbose) << "NPC '" << npc.mId << "' (" << npc.mName << ") has nonexistent class '" << npc.mClass << "', using '" << defaultCls << "' class as replacement.";
-                npc.mClass = defaultCls;
-                changed = true;
-            }
-        }
-
-        if (changed)
-            npcsToReplace.push_back(npc);
-    }
+    std::vector<ESM::NPC> npcsToReplace = getNPCsToReplace(mFactions, mClasses, mNpcs.mStatic);
 
     for (const ESM::NPC &npc : npcsToReplace)
     {
@@ -331,6 +340,14 @@ void ESMStore::validate()
     }
 }
 
+void ESMStore::validateDynamic()
+{
+    std::vector<ESM::NPC> npcsToReplace = getNPCsToReplace(mFactions, mClasses, mNpcs.mDynamic);
+
+    for (const ESM::NPC &npc : npcsToReplace)
+        mNpcs.insert(npc);
+}
+
     int ESMStore::countSavedGameRecords() const
     {
         return 1 // DYNA (dynamic name counter)
@@ -345,7 +362,8 @@ void ESMStore::validate()
             +mWeapons.getDynamicSize()
             +mCreatureLists.getDynamicSize()
             +mItemLists.getDynamicSize()
-            +mCreatures.getDynamicSize();
+            +mCreatures.getDynamicSize()
+            +mContainers.getDynamicSize();
     }
 
     void ESMStore::write (ESM::ESMWriter& writer, Loading::Listener& progress) const
@@ -368,6 +386,7 @@ void ESMStore::validate()
         mItemLists.write (writer, progress);
         mCreatureLists.write (writer, progress);
         mCreatures.write (writer, progress);
+        mContainers.write (writer, progress);
     }
 
     bool ESMStore::readRecord (ESM::ESMReader& reader, uint32_t type)
@@ -382,11 +401,14 @@ void ESMStore::validate()
             case ESM::REC_ENCH:
             case ESM::REC_SPEL:
             case ESM::REC_WEAP:
-            case ESM::REC_NPC_:
             case ESM::REC_LEVI:
             case ESM::REC_LEVC:
-            case ESM::REC_CREA:
                 mStores[type]->read (reader);
+                return true;
+            case ESM::REC_NPC_:
+            case ESM::REC_CREA:
+            case ESM::REC_CONT:
+                mStores[type]->read (reader, true);
                 return true;
 
             case ESM::REC_DYNA:

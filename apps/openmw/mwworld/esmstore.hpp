@@ -80,8 +80,6 @@ namespace MWWorld
 
         std::map<int, StoreBase *> mStores;
 
-        ESM::NPC mPlayerTemplate;
-
         unsigned int mDynamicCount;
 
         mutable std::map<std::string, std::weak_ptr<MWMechanics::SpellList> > mSpellListCache;
@@ -172,15 +170,17 @@ namespace MWWorld
             for (std::map<int, StoreBase *>::iterator it = mStores.begin(); it != mStores.end(); ++it)
                 it->second->clearDynamic();
 
-            mNpcs.insert(mPlayerTemplate);
+            movePlayerRecord();
         }
 
         void movePlayerRecord ()
         {
-            mPlayerTemplate = *mNpcs.find("player");
-            mNpcs.eraseStatic(mPlayerTemplate.mId);
-            mNpcs.insert(mPlayerTemplate);
+            auto player = mNpcs.find("player");
+            mNpcs.insert(*player);
         }
+
+        /// Validate entries in store after loading a save
+        void validateDynamic();
 
         void load(ESM::ESMReader &esm, Loading::Listener* listener);
 
@@ -196,7 +196,7 @@ namespace MWWorld
             const std::string id = "$dynamic" + std::to_string(mDynamicCount++);
 
             Store<T> &store = const_cast<Store<T> &>(get<T>());
-            if (store.search(id) != 0)
+            if (store.search(id) != nullptr)
             {
                 const std::string msg = "Try to override existing record '" + id + "'";
                 throw std::runtime_error(msg);
@@ -234,7 +234,7 @@ namespace MWWorld
             const std::string id = "$dynamic" + std::to_string(mDynamicCount++);
 
             Store<T> &store = const_cast<Store<T> &>(get<T>());
-            if (store.search(id) != 0)
+            if (store.search(id) != nullptr)
             {
                 const std::string msg = "Try to override existing record '" + id + "'";
                 throw std::runtime_error(msg);
@@ -264,8 +264,11 @@ namespace MWWorld
         // To be called when we are done with dynamic record loading
         void checkPlayer();
 
+        /// @return The number of instances defined in the base files. Excludes changes from the save file.
         int getRefCount(const std::string& id) const;
 
+        /// Actors with the same ID share spells, abilities, etc.
+        /// @return The shared spell list to use for this actor and whether or not it has already been initialized.
         std::pair<std::shared_ptr<MWMechanics::SpellList>, bool> getSpellList(const std::string& id) const;
     };
 
@@ -283,7 +286,7 @@ namespace MWWorld
         {
             return mNpcs.insert(npc);
         }
-        else if (mNpcs.search(id) != 0)
+        else if (mNpcs.search(id) != nullptr)
         {
             const std::string msg = "Try to override existing record '" + id + "'";
             throw std::runtime_error(msg);

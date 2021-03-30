@@ -24,7 +24,7 @@
 #ifndef BSA_BSA_FILE_H
 #define BSA_BSA_FILE_H
 
-#include <stdint.h>
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <map>
@@ -106,8 +106,7 @@ public:
       : mIsLoaded(false)
     { }
 
-    virtual ~BSAFile()
-    { }
+    virtual ~BSAFile() = default;
 
     /// Open an archive file.
     void open(const std::string &file);
@@ -136,6 +135,11 @@ public:
     /// @note Thread safe.
     const FileList &getList() const
     { return mFiles; }
+
+    const std::string& getFilename() const
+    {
+        return mFilename;
+    }
 };
 
 }

@@ -253,13 +253,13 @@ namespace MWClass
         MWMechanics::Movement mMovement;
         MWWorld::InventoryStore mInventoryStore;
 
-        virtual MWWorld::CustomData *clone() const;
+        MWWorld::CustomData *clone() const override;
 
-        virtual NpcCustomData& asNpcCustomData()
+        NpcCustomData& asNpcCustomData() override
         {
             return *this;
         }
-        virtual const NpcCustomData& asNpcCustomData() const
+        const NpcCustomData& asNpcCustomData() const override
         {
             return *this;
         }
@@ -418,10 +418,10 @@ namespace MWClass
     {
         const MWWorld::LiveCellRef<ESM::NPC> *ref = ptr.get<ESM::NPC>();
 
-        std::string model = "meshes\\base_anim.nif";
+        std::string model = Settings::Manager::getString("baseanim", "Models");
         const ESM::Race* race = MWBase::Environment::get().getWorld()->getStore().get<ESM::Race>().find(ref->mBase->mRace);
         if(race->mData.mFlags & ESM::Race::Beast)
-            model = "meshes\\base_animkna.nif";
+            model = Settings::Manager::getString("baseanimkna", "Models");
 
         return model;
     }
@@ -431,12 +431,12 @@ namespace MWClass
         const MWWorld::LiveCellRef<ESM::NPC> *npc = ptr.get<ESM::NPC>();
         const ESM::Race* race = MWBase::Environment::get().getWorld()->getStore().get<ESM::Race>().search(npc->mBase->mRace);
         if(race && race->mData.mFlags & ESM::Race::Beast)
-            models.push_back("meshes\\base_animkna.nif");
+            models.emplace_back(Settings::Manager::getString("baseanimkna", "Models"));
 
         // keep these always loaded just in case
-        models.push_back("meshes/xargonian_swimkna.nif");
-        models.push_back("meshes/xbase_anim_female.nif");
-        models.push_back("meshes/xbase_anim.nif");
+        models.emplace_back(Settings::Manager::getString("xargonianswimkna", "Models"));
+        models.emplace_back(Settings::Manager::getString("xbaseanimfemale", "Models"));
+        models.emplace_back(Settings::Manager::getString("xbaseanim", "Models"));
 
         if (!npc->mBase->mModel.empty())
             models.push_back("meshes/"+npc->mBase->mModel);
@@ -936,10 +936,13 @@ namespace MWClass
         return ref->mBase->mScript;
     }
 
-    float Npc::getSpeed(const MWWorld::Ptr& ptr) const
+    float Npc::getMaxSpeed(const MWWorld::Ptr& ptr) const
     {
+        // TODO: This function is called several times per frame for each NPC.
+        // It would be better to calculate it only once per frame for each NPC and save the result in CreatureStats.
         const MWMechanics::CreatureStats& stats = getCreatureStats(ptr);
-        if (stats.isParalyzed() || stats.getKnockedDown() || stats.isDead())
+        bool godmode = ptr == MWMechanics::getPlayer() && MWBase::Environment::get().getWorld()->getGodModeState();
+        if ((!godmode && stats.isParalyzed()) || stats.getKnockedDown() || stats.isDead())
             return 0.f;
 
         const MWBase::World *world = MWBase::Environment::get().getWorld();
@@ -979,11 +982,6 @@ namespace MWClass
         if(npcdata->mNpcStats.isWerewolf() && running && npcdata->mNpcStats.getDrawState() == MWMechanics::DrawState_Nothing)
             moveSpeed *= gmst.fWereWolfRunMult->mValue.getFloat();
 
-        const MWMechanics::Movement& movementSettings = ptr.getClass().getMovementSettings(ptr);
-        if (movementSettings.mIsStrafing)
-            moveSpeed *= 0.75f;
-        moveSpeed *= movementSettings.mSpeedFactor;
-
         return moveSpeed;
     }
 
@@ -993,7 +991,8 @@ namespace MWClass
             return 0.f;
 
         const MWMechanics::CreatureStats& stats = getCreatureStats(ptr);
-        if (stats.isParalyzed() || stats.getKnockedDown() || stats.isDead())
+        bool godmode = ptr == MWMechanics::getPlayer() && MWBase::Environment::get().getWorld()->getGodModeState();
+        if ((!godmode && stats.isParalyzed()) || stats.getKnockedDown() || stats.isDead())
             return 0.f;
 
         const NpcCustomData *npcdata = static_cast<const NpcCustomData*>(ptr.getRefData().getCustomData());
@@ -1400,14 +1399,6 @@ namespace MWClass
                         ptr.getCellRef().getPosition().pos[2]);
             }
         }
-    }
-
-    void Npc::restock(const MWWorld::Ptr& ptr) const
-    {
-        MWWorld::LiveCellRef<ESM::NPC> *ref = ptr.get<ESM::NPC>();
-        const ESM::InventoryList& list = ref->mBase->mInventory;
-        MWWorld::ContainerStore& store = getContainerStore(ptr);
-        store.restock(list, ptr, ptr.getCellRef().getRefId());
     }
 
     int Npc::getBaseFightRating (const MWWorld::ConstPtr& ptr) const

@@ -13,12 +13,13 @@
 
 #include <SDL_video.h>
 
+#include <numeric>
+
 #include <components/files/configurationmanager.hpp>
-#include <components/misc/gcd.hpp>
 
 QString getAspect(int x, int y)
 {
-    int gcd = Misc::gcd (x, y);
+    int gcd = std::gcd (x, y);
     int xaspect = x / gcd;
     int yaspect = y / gcd;
     // special case: 8 : 5 is usually referred to as 16:10
@@ -28,9 +29,8 @@ QString getAspect(int x, int y)
     return QString(QString::number(xaspect) + ":" + QString::number(yaspect));
 }
 
-Launcher::GraphicsPage::GraphicsPage(Files::ConfigurationManager &cfg, Settings::Manager &engineSettings, QWidget *parent)
+Launcher::GraphicsPage::GraphicsPage(Settings::Manager &engineSettings, QWidget *parent)
     : QWidget(parent)
-    , mCfgMgr(cfg)
     , mEngineSettings(engineSettings)
 {
     setObjectName ("GraphicsPage");
@@ -65,16 +65,19 @@ bool Launcher::GraphicsPage::setupSDL()
         msgBox.setWindowTitle(tr("Error receiving number of screens"));
         msgBox.setIcon(QMessageBox::Critical);
         msgBox.setStandardButtons(QMessageBox::Ok);
-        msgBox.setText(tr("<br><b>SDL_GetNumDisplayModes failed:</b><br><br>") + QString::fromUtf8(SDL_GetError()) + "<br>");
+        msgBox.setText(tr("<br><b>SDL_GetNumVideoDisplays failed:</b><br><br>") + QString::fromUtf8(SDL_GetError()) + "<br>");
         msgBox.exec();
         return false;
     }
 
     screenComboBox->clear();
+    mResolutionsPerScreen.clear();
     for (int i = 0; i < displays; i++)
     {
+        mResolutionsPerScreen.append(getAvailableResolutions(i));
         screenComboBox->addItem(QString(tr("Screen ")) + QString::number(i + 1));
     }
+    screenChanged(0);
 
     // Disconnect from SDL processes
     quitSDL();
@@ -203,7 +206,7 @@ void Launcher::GraphicsPage::saveSettings()
     if (cScreen != mEngineSettings.getInt("screen", "Video"))
         mEngineSettings.setInt("screen", "Video", cScreen);
 
-    if (framerateLimitCheckBox->checkState())
+    if (framerateLimitCheckBox->checkState() != Qt::Unchecked)
     {
         float cFpsLimit = framerateLimitSpinBox->value();
         if (cFpsLimit != mEngineSettings.getFloat("framerate limit", "Video"))
@@ -214,7 +217,7 @@ void Launcher::GraphicsPage::saveSettings()
         mEngineSettings.setFloat("framerate limit", "Video", 0);
     }
 
-    int cShadowDist = shadowDistanceCheckBox->checkState() ? shadowDistanceSpinBox->value() : 0;
+    int cShadowDist = shadowDistanceCheckBox->checkState() != Qt::Unchecked ? shadowDistanceSpinBox->value() : 0;
     if (mEngineSettings.getInt("maximum shadow map distance", "Shadows") != cShadowDist)
         mEngineSettings.setInt("maximum shadow map distance", "Shadows", cShadowDist);
     float cFadeStart = fadeStartSpinBox->value();
@@ -331,7 +334,7 @@ void Launcher::GraphicsPage::screenChanged(int screen)
 {
     if (screen >= 0) {
         resolutionComboBox->clear();
-        resolutionComboBox->addItems(getAvailableResolutions(screen));
+        resolutionComboBox->addItems(mResolutionsPerScreen[screen]);
     }
 }
 

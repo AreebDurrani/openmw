@@ -63,6 +63,8 @@ namespace MWMechanics
 
             void purgeSpellEffects (int casterActorId);
 
+            void predictAndAvoidCollisions();
+
         public:
 
             Actors();
@@ -179,6 +181,7 @@ namespace MWMechanics
 
             /// Get the list of AiFollow::mFollowIndex for all actors following this target
             std::list<int> getActorsFollowingIndices(const MWWorld::Ptr& actor);
+            std::map<int, MWWorld::Ptr> getActorsFollowingByIndex(const MWWorld::Ptr& actor);
 
             ///Returns the list of actors which are fighting the given actor
             /**ie AiCombat is active and the target is the actor **/
@@ -204,11 +207,13 @@ namespace MWMechanics
 
     private:
         void updateVisibility (const MWWorld::Ptr& ptr, CharacterController* ctrl);
+        void applyCureEffects (const MWWorld::Ptr& actor);
 
         PtrActorMap mActors;
         float mTimerDisposeSummonsCorpses;
         float mActorsProcessingRange;
 
+        bool mSmoothMovement;
     };
 }
 
